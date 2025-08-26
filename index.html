@@ -327,7 +327,13 @@ function saveAttendance(rows){ localStorage.setItem(LS_KEY, JSON.stringify(rows)
 =========================== */
 const $ = sel => document.querySelector(sel);
 function todayStr(d=new Date()){ return d.toISOString().slice(0,10); }
-function showToast(msg){ const t=$("#toast"); t.textContent=msg; t.style.display="block"; setTimeout(()=>t.style.display="none",1500); }
+function showToast(msg, bg){
+  const t=$("#toast");
+  const oldBg = t.style.background;
+  if(bg) t.style.background = bg;
+  t.textContent=msg; t.style.display="block";
+  setTimeout(()=>{ t.style.display="none"; t.style.background = oldBg || "#111827"; },1500);
+}
 
 /* Beep + voice */
 function playBeep(){
@@ -447,27 +453,32 @@ function markAttendanceFromId(id){
   const entry = { id, name: person?person.name:"(Unknown)", class: person?person.class:"-", date: todayStr(now), time: now.toLocaleTimeString(), status:"Present" };
 
   if(!person){
-    entry.status="Duplicate"; appendLogEntry(entry);
-    showToast("Unknown QR / Student not found");
+    // 🚫 Unknown scan: no row; red toast + voice
+    showToast("Unknown QR / Student not found", "#b91c1c");
     if($("#beep").checked) playBeep();
     speakText("Unknown QR code scanned");
-    return;
-  }
-  if(alreadyMarkedToday(id)){
-    entry.status="Duplicate"; appendLogEntry(entry);
-    $("#lastScanMsg").innerHTML = `<span style="color:#f87171">Duplicate scan blocked for ${person.name} (Class ${person.class})</span>`;
-    if($("#beep").checked) playBeep();
-    speakText(`Duplicate scan for ${person.name}`);
+    $("#lastScanMsg").innerHTML = `<span style="color:#f87171">Unknown QR scanned</span>`;
     return;
   }
 
-  // Present case
+  if(alreadyMarkedToday(id)){
+    // ❌ Duplicate: no row; red toast + red message
+    showToast(`❌ Already Scanned: ${person.name} (Class ${person.class})`, "#b91c1c");
+    $("#lastScanMsg").innerHTML =
+      `<span style="color:#f87171">Already Scanned: ${person.name} (Class ${person.class})</span>`;
+    if($("#beep").checked) playBeep();
+    speakText(`Already scanned ${person.name}`);
+    return;
+  }
+
+  // ✅ Normal Present case
   appendLogEntry(entry);
-  $("#lastScanMsg").innerHTML = `<span style="color:#34d399">Marked Present: ${person.name} (Class ${person.class})</span>`;
+  $("#lastScanMsg").innerHTML =
+    `<span style="color:#34d399">Marked Present: ${person.name} (Class ${person.class})</span>`;
   if($("#beep").checked) playBeep();
   speakText(`${person.name} Present`);
 
-  // 🔔 notify parent email (only for Present)
+  // 🔔 notify parent
   notifyParentEmail({ id, name: person.name, klass: person.class, email: person.email, when: now });
 }
 
@@ -590,9 +601,9 @@ fileInput.addEventListener('change', async (e) => {
     }
     const result = await qrReader.decodeFromImageUrl(url);
     if (result && result.text) { markAttendanceFromId(result.text.trim()); showToast("Scanned from image"); }
-    else { showToast("No QR found in image"); }
+    else { showToast("No QR found in image", "#b91c1c"); }
   } catch (err) {
-    console.error(err); showToast("Could not read QR from image");
+    console.error(err); showToast("Could not read QR from image", "#b91c1c");
   } finally {
     fileInput.value = ""; URL.revokeObjectURL(url);
   }
@@ -627,11 +638,47 @@ document.getElementById("finalizeAndDownload").addEventListener("click", finaliz
 /* Camera hot-switch */
 cameraSelect.addEventListener("change", ()=>{ if(codeReader){ startScanner(); } });
 
+/* ===========================
+   Auto Reset Daily
+   - If date changed since last run, ensure a fresh day and update marker
+=========================== */
+function autoResetDaily(){
+  const today = todayStr();
+  const last = localStorage.getItem("lastDate");
+  if(last !== today){
+    // Remove any stale rows marked for "today" (edge case if tab was left open)
+    logRows = logRows.filter(r => r.date !== today);
+    saveAttendance(logRows);
+    localStorage.setItem("lastDate", today);
+  }
+}
+// Build absent list for the selected day (today)
+const t = todayStr();
+const absentRecords = studentArr
+  .filter(s => !logRows.find(r => r.id === s.id && r.date === t && r.status === "Present"))
+  .map(s => ({
+    studentId: s.id,
+    studentName: s.name,
+    parentEmail: s.email,
+    dateISO: t
+  }));
+
+fetch(`${API_BASE}/api/send-absent-emails`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ records: absentRecords })
+})
+.then(r => r.json())
+.then(d => console.log("Absent alerts result:", d))
+.catch(console.error);
+
 /* Init */
 (async function init(){
+  autoResetDaily();        // ✅ Auto Reset Daily
   refreshUI();
   try{ await listCameras(); } catch{}
 })();
+
 </script>
 </body>
 </html>
