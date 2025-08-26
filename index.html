@@ -148,7 +148,6 @@ td.center{text-align:center}
 @media (max-width:768px){
   .grid{grid-template-columns:1fr}
 }
-
 </style>
 </head>
 <body>
@@ -173,8 +172,10 @@ td.center{text-align:center}
 <!-- MAIN -->
 <main class="wrap" style="margin-top:12px;">
   <div class="grid">
+    <!-- LEFT: Scanner + Log -->
     <section class="card">
       <h2>Scan Student QR Code</h2>
+
       <div id="scanTile" class="scan-drop">
         <div class="qr-placeholder">🔲</div>
         <br>
@@ -230,8 +231,10 @@ td.center{text-align:center}
       </div>
     </section>
 
+    <!-- RIGHT: Dashboard + Actions + History -->
     <section class="card">
       <h2>Dashboard Overview</h2>
+
       <div class="table-wrap">
         <table id="dashTable" aria-label="Dashboard by Class">
           <thead>
@@ -242,11 +245,30 @@ td.center{text-align:center}
           <tbody id="dashBody"></tbody>
         </table>
       </div>
+
       <div class="dash-actions">
+        <!-- NEW: Clear all attendance -->
+        <button id="clearAll" class="btn-danger-lg">Clear ALL Attendance</button>
         <button id="clearToday" class="btn-danger-lg">Clear Today’s Attendance</button>
         <button id="finalizeAndDownload" class="btn-accent-lg">Finalize Day (Mark Absent) + Download</button>
       </div>
+
       <div class="subtitle" id="overallSummary" style="margin-top:8px;">Overall —</div>
+
+      <!-- NEW: History Section -->
+      <div id="historySection" style="margin-top:14px;">
+        <h2 style="font-size:var(--fs-h2); margin:10px 0 8px;">History (Recent Days)</h2>
+        <div class="table-wrap">
+          <table id="historyTable" aria-label="Attendance History">
+            <thead>
+              <tr>
+                <th>Date</th><th>Present</th><th>Absent</th><th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 </main>
@@ -269,16 +291,12 @@ const students = {
   "SAH25011": { name:"Aayush Kant", class:"8",  phone:"7321852484", email:"Shwetarani62621@gmail.com" },
   "SAH25201": { name:"Aarav Kumar", class:"8",  phone:"6204020655", email:"Shyamroaster@gmail.com" },
 
-
-
   "SAJ25013": { name:"Kritika Arya", class:"10", phone:"7870454422", email:"nitya4world@gmail.com" },
   "SAJ25012": { name:"Shweta Kumari", class:"10", phone:"8873238428", email:"ajaybhagat1880@gmail.com" },
   "SAJ25011": { name:"Divyanshu Kumar", class:"10", phone:"8789580780", email:"divyanshukumar2323k@gmail.com" },
   "SAJ25016": { name:"Arnav", class:"10", phone:"9934490207", email:"rajnishbharti84@gmail.com" },
   "SAJ25015": { name:"Dhruv Ranjan", class:"10", phone:"7979709595", email:"dhruvranjan888@gmail.com" },
   "SAJ25014": { name:"Sonali Kumari", class:"10", phone:"8862991979", email:"dollydevi0108@gmail.com" },
-
-
 
   "SAN25008": { name:"Ashutosh Raj", class:"9",  phone:"9905606885", email:"ajaybhagat1880@gmail.com" },
   "SAN25016": { name:"Satyam Kumar", class:"9",  phone:"9472094162", email:"raybishwambhar851@gmail.com" },
@@ -289,8 +307,6 @@ const students = {
   "SAN25013": { name:"Anamika", class:"9", phone:"9508400448", email:"Sinha2nitesh@gmail.com" },
   "SAN25014": { name:"Saumya Chauhan", class:"9", phone:"6205053029", email:"Hmvishwajeetkumar2002@gmail.com" },
   "SAN25017": { name:"Kumari Kamya", class:"9", phone:"6204020655", email:"Shyam123456006@gmail.com" },
-
-
 
   "SAE25045": { name:"Khushi Kumari", class:"11", phone:"8877949381", email:"Hmvishwajeetkumar2002@gmail.com" },
   "SAE25020": { name:"Saloni", class:"11", phone:"6204020655", email:"anjalikumari@gmail.com" },
@@ -352,9 +368,14 @@ let logRows = loadAttendance();
 const studentMap = new Map(studentArr.map(s => [s.id, s]));
 const classes = [...new Set(studentArr.map(s=>s.class))].sort((a,b)=>+a-+b);
 
-/* DOM init */
+/* ===========================
+   DOM refs
+=========================== */
 const cameraSelect = $("#cameraSelect");
 const filterClass = $("#filterClass");
+const historyBody = $("#historyBody");
+
+/* Populate class filter */
 classes.forEach(c=>{ const o=document.createElement("option"); o.value=c; o.textContent=`Class ${c}`; filterClass.appendChild(o); });
 
 /* ===========================
@@ -380,6 +401,37 @@ function renderDashboard(){
 
   const absent = total - present;
   $("#overallSummary").textContent = `Overall — Total: ${total} | Present: ${present} | Absent: ${absent}`;
+}
+
+/* ===========================
+   History (Recent Dates)
+=========================== */
+function renderHistory(limit = 10){
+  historyBody.innerHTML = "";
+
+  // Group by date
+  const byDate = logRows.reduce((acc, r) => {
+    acc[r.date] = acc[r.date] || { present:0, absent:0, total:0 };
+    if (r.status === "Present") acc[r.date].present++;
+    if (r.status === "Absent") acc[r.date].absent++;
+    acc[r.date].total++;
+    return acc;
+  }, {});
+
+  const dates = Object.keys(byDate).sort((a,b)=> b.localeCompare(a)).slice(0, limit);
+  if (!dates.length){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="4" class="center" style="color:var(--muted)">No history found</td>`;
+    historyBody.appendChild(tr);
+    return;
+  }
+
+  dates.forEach(d=>{
+    const rec = byDate[d];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${d}</td><td>${rec.present}</td><td>${rec.absent}</td><td>${rec.total}</td>`;
+    historyBody.appendChild(tr);
+  });
 }
 
 /* ===========================
@@ -413,7 +465,7 @@ function renderTable(){
     tb.appendChild(tr);
   });
 }
-function refreshUI(){ renderDashboard(); renderTable(); }
+function refreshUI(){ renderDashboard(); renderTable(); renderHistory(); }
 
 /* ===========================
    Backend notify (email parents)
@@ -499,16 +551,31 @@ function downloadCSV(){
 }
 
 /* ===========================
-   Clear Today
+   Clear Attendance (Today / All)
 =========================== */
 function clearToday(){
-  const t=todayStr(); logRows = logRows.filter(r=>r.date!==t); saveAttendance(logRows); refreshUI(); showToast("Cleared today’s attendance");
+  const t=todayStr();
+  logRows = logRows.filter(r=>r.date!==t);
+  saveAttendance(logRows);
+  refreshUI();
+  showToast("Cleared today’s attendance");
+}
+
+function clearAll(){
+  if(!confirm("This will permanently clear ALL attendance logs. Continue?")) return;
+  logRows = [];
+  saveAttendance(logRows);
+  refreshUI();
+  showToast("All attendance cleared");
 }
 
 /* ===========================
    FINALIZE DAY + DOWNLOAD FULL LIST
+   - Marks unscanned students as Absent
+   - Downloads full CSV
+   - Sends Absent emails (batch) via /api/send-absent-emails
 =========================== */
-function finalizeDayAndDownload(){
+async function finalizeDayAndDownload(){
   const t = todayStr();
 
   // Ensure one row per student for today
@@ -523,7 +590,7 @@ function finalizeDayAndDownload(){
   refreshUI();
   showToast("Day finalized. Unscanned marked Absent.");
 
-  // Build full CSV (all students)
+  // Build full CSV (all students for today)
   const header = ["#", "ID", "Name", "Class", "Status", "Date", "Time"];
   const rowsForToday = studentArr.map((s, idx)=>{
     const row = logRows.find(r=>r.id===s.id && r.date===t);
@@ -537,6 +604,36 @@ function finalizeDayAndDownload(){
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a"); a.href=url; a.download=`attendance_FINAL_${t}.csv`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+
+  // 🔔 Send ABSENT alerts (batch) after finalize
+  try{
+    const absentRecords = studentArr
+      .filter(s => {
+        const row = logRows.find(r => r.id===s.id && r.date===t);
+        return !row || row.status !== "Present";
+      })
+      .map(s => ({
+        studentId: s.id,
+        studentName: s.name,
+        parentEmail: s.email,
+        dateISO: t
+      }));
+
+    if(absentRecords.length){
+      const res = await fetch(`${API_BASE}/api/send-absent-emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records: absentRecords })
+      });
+      const data = await res.json();
+      console.log("Absent alerts result:", data);
+      showToast(`Absent alerts sent: ${data.sent || 0}/${absentRecords.length}`);
+    } else {
+      console.log("No absent alerts to send.");
+    }
+  }catch(e){
+    console.warn("Absent alerts failed:", e);
+  }
 }
 
 /* ===========================
@@ -561,8 +658,8 @@ async function startScanner(){
   codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
   currentDeviceId = cameraSelect.value || undefined;
-  document.getElementById("startBtn").disabled=true; 
-  document.getElementById("stopBtn").disabled=false;
+  $("#startBtn").disabled=true; 
+  $("#stopBtn").disabled=false;
   try{
     await codeReader.decodeFromVideoDevice(currentDeviceId,"video",(res,err)=>{
       if(res && res.text){ markAttendanceFromId(res.text.trim()); }
@@ -571,20 +668,22 @@ async function startScanner(){
     showToast("Camera started");
   }catch(e){
     console.error(e); showToast("Could not start camera");
-    document.getElementById("startBtn").disabled=false; 
-    document.getElementById("stopBtn").disabled=true;
+    $("#startBtn").disabled=false; 
+    $("#stopBtn").disabled=true;
     setScanActive(false);
   }
 }
 async function stopScanner(){
   if(codeReader){ await codeReader.reset(); codeReader=null; }
-  document.getElementById("startBtn").disabled=false; 
-  document.getElementById("stopBtn").disabled=true;
+  $("#startBtn").disabled=false; 
+  $("#stopBtn").disabled=true;
   setScanActive(false);
   showToast("Camera stopped");
 }
 
-/* Scan-from-Image */
+/* ===========================
+   Scan-from-Image
+=========================== */
 const fileInput = document.getElementById('fileInput');
 fileInput.addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
@@ -609,13 +708,14 @@ fileInput.addEventListener('change', async (e) => {
   }
 });
 
-/* Filters toggle */
+/* ===========================
+   Filters toggle & UI helpers
+=========================== */
 document.getElementById("toggleFilters").addEventListener("click", ()=>{
   const p = document.getElementById("filtersPanel");
   p.style.display = p.style.display === "block" ? "none" : "block";
 });
 
-/* Tile visual state */
 const scanTile = document.getElementById("scanTile");
 function setScanActive(active){
   const video = document.getElementById("video");
@@ -623,14 +723,17 @@ function setScanActive(active){
   else{ scanTile.classList.remove("scan-active"); video.style.display="none"; }
 }
 
-/* Buttons */
+/* ===========================
+   Buttons
+=========================== */
 document.getElementById("startBtn").addEventListener("click", startScanner);
 document.getElementById("stopBtn").addEventListener("click", stopScanner);
 document.getElementById("downloadCsv").addEventListener("click", downloadCSV);
 document.getElementById("clearToday").addEventListener("click", clearToday);
+document.getElementById("clearAll").addEventListener("click", clearAll);
 document.getElementById("finalizeAndDownload").addEventListener("click", finalizeDayAndDownload);
 
-/* Filters */
+/* Filters re-render */
 ["filterClass","filterStatus","filterDateFrom","filterDateTo"].forEach(id =>
   document.getElementById(id).addEventListener("input", renderTable)
 );
@@ -646,39 +749,22 @@ function autoResetDaily(){
   const today = todayStr();
   const last = localStorage.getItem("lastDate");
   if(last !== today){
-    // Remove any stale rows marked for "today" (edge case if tab was left open)
+    // Remove any stale rows marked for "today" (if the tab was left open & prefilled)
     logRows = logRows.filter(r => r.date !== today);
     saveAttendance(logRows);
     localStorage.setItem("lastDate", today);
   }
 }
-// Build absent list for the selected day (today)
-const t = todayStr();
-const absentRecords = studentArr
-  .filter(s => !logRows.find(r => r.id === s.id && r.date === t && r.status === "Present"))
-  .map(s => ({
-    studentId: s.id,
-    studentName: s.name,
-    parentEmail: s.email,
-    dateISO: t
-  }));
 
-fetch(`${API_BASE}/api/send-absent-emails`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ records: absentRecords })
-})
-.then(r => r.json())
-.then(d => console.log("Absent alerts result:", d))
-.catch(console.error);
-
-/* Init */
+/* ===========================
+   Init
+=========================== */
 (async function init(){
   autoResetDaily();        // ✅ Auto Reset Daily
-  refreshUI();
+  refreshUI();             // Render dashboard, table, and history
   try{ await listCameras(); } catch{}
 })();
-
 </script>
 </body>
 </html>
+
