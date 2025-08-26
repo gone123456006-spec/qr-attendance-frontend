@@ -142,7 +142,15 @@ td.center{text-align:center}
 .chip.ok{background:#dff7ea;border-color:#bfead4;color:var(--ok)}
 .chip.warn{background:#ffecec;border-color:#ffc9c9;color:var(--warn)}
 
-.dash-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+/* ====== Dashboard actions (one line) ====== */
+.dash-actions{
+  display:flex;
+  gap:10px;
+  justify-content:flex-end;
+  align-items:center;
+  flex-wrap:nowrap; /* ⬅ force one line */
+  margin-top:16px
+}
 
 /* ====== Responsive ====== */
 @media (max-width:768px){
@@ -216,7 +224,8 @@ td.center{text-align:center}
         </div>
       </div>
 
-      <div id="lastScanMsg" style="margin-top:6px; color:var(--muted); font-size:13px;"></div>
+      <!-- Centered last-scan message -->
+      <div id="lastScanMsg" style="margin-top:6px; color:var(--muted); font-size:13px; text-align:center;"></div>
 
       <div class="table-wrap" style="margin-top:10px;">
         <table id="logTable" aria-label="Attendance Log">
@@ -247,15 +256,16 @@ td.center{text-align:center}
       </div>
 
       <div class="dash-actions">
-        <!-- NEW: Clear all attendance -->
-        <button id="clearAll" class="btn-danger-lg">Clear ALL Attendance</button>
-        <button id="clearToday" class="btn-danger-lg">Clear Today’s Attendance</button>
-        <button id="finalizeAndDownload" class="btn-accent-lg">Finalize Day (Mark Absent) + Download</button>
+        <!-- Short, one-line buttons -->
+        <button id="clearAll" class="btn-danger-lg">Clear All</button>
+        <button id="clearToday" class="btn-danger-lg">Clear Today</button>
+        <button id="finalizeAndDownload" class="btn-accent-lg">Finalize Day</button>
       </div>
 
-      <div class="subtitle" id="overallSummary" style="margin-top:8px;">Overall —</div>
+      <!-- Center the overall summary -->
+      <div class="subtitle" id="overallSummary" style="margin-top:8px; text-align:center;">Overall —</div>
 
-      <!-- NEW: History Section -->
+      <!-- History Section -->
       <div id="historySection" style="margin-top:14px;">
         <h2 style="font-size:var(--fs-h2); margin:10px 0 8px;">History (Recent Days)</h2>
         <div class="table-wrap">
@@ -273,7 +283,11 @@ td.center{text-align:center}
   </div>
 </main>
 
+<!-- Toast -->
 <div class="toast" id="toast" style="display:none; position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 14px; border-radius:999px; font-weight:700;"></div>
+
+<!-- 🎵 Custom beep hook: set src to your tone file (mp3/wav). If empty, oscillator fallback is used. -->
+<audio id="beepAudio" preload="auto" src=""></audio>
 
 <script>
 /* ===========================
@@ -351,13 +365,21 @@ function showToast(msg, bg){
   setTimeout(()=>{ t.style.display="none"; t.style.background = oldBg || "#111827"; },1500);
 }
 
-/* Beep + voice */
+/* 🎵 Customizable beep: plays #beepAudio if src is set; else uses oscillator */
+const beepEl = document.getElementById("beepAudio");
 function playBeep(){
-  const ctx = new (window.AudioContext||window.webkitAudioContext)();
-  const o = ctx.createOscillator(); const g = ctx.createGain();
-  o.connect(g); g.connect(ctx.destination); o.type="square"; o.frequency.value=880;
-  o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.25);
-  setTimeout(()=>{o.stop();ctx.close();},260);
+  try{
+    if(beepEl && beepEl.src && beepEl.src.trim() !== ""){
+      beepEl.currentTime = 0;
+      beepEl.play().catch(()=>{});
+      return;
+    }
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.type="square"; o.frequency.value=880;
+    o.start(); g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.25);
+    setTimeout(()=>{o.stop();ctx.close();},260);
+  }catch{}
 }
 function speakText(text){ try{ const u=new SpeechSynthesisUtterance(text); u.lang="en-IN"; speechSynthesis.speak(u); }catch{} }
 
@@ -509,15 +531,15 @@ function markAttendanceFromId(id){
     showToast("Unknown QR / Student not found", "#b91c1c");
     if($("#beep").checked) playBeep();
     speakText("Unknown QR code scanned");
-    $("#lastScanMsg").innerHTML = `<span style="color:#f87171">Unknown QR scanned</span>`;
+    $("#lastScanMsg").innerHTML = `<span style="color:#f87171; font-weight:800;">Unknown QR scanned</span>`;
     return;
   }
 
   if(alreadyMarkedToday(id)){
-    // ❌ Duplicate: no row; red toast + red message
+    // ❌ Duplicate: no row; red toast + centered GREEN bold message (as requested)
     showToast(`❌ Already Scanned: ${person.name} (Class ${person.class})`, "#b91c1c");
     $("#lastScanMsg").innerHTML =
-      `<span style="color:#f87171">Already Scanned: ${person.name} (Class ${person.class})</span>`;
+      `<span style="color:#16a34a; font-weight:800;">Already Scanned: ${person.name} (Class ${person.class})</span>`;
     if($("#beep").checked) playBeep();
     speakText(`Already scanned ${person.name}`);
     return;
@@ -526,7 +548,7 @@ function markAttendanceFromId(id){
   // ✅ Normal Present case
   appendLogEntry(entry);
   $("#lastScanMsg").innerHTML =
-    `<span style="color:#34d399">Marked Present: ${person.name} (Class ${person.class})</span>`;
+    `<span style="color:#34d399; font-weight:800;">Marked Present: ${person.name} (Class ${person.class})</span>`;
   if($("#beep").checked) playBeep();
   speakText(`${person.name} Present`);
 
@@ -767,4 +789,3 @@ function autoResetDaily(){
 </script>
 </body>
 </html>
-
